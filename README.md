@@ -92,7 +92,15 @@ official Bilibili account (神宫凉子, UID 13737731) and follow its license.
 `conf.yaml`, `memory/`, `chat_history/`, `logs/` and `voice/` are git-ignored.
 Conversations and screenshots are sent to OpenRouter and Groq — keep that in mind.
 
-## License
+## License and credits
 
-MIT — see [LICENSE](LICENSE). Based on Open-LLM-VTuber by Yi-Ting Chiu and contributors.
-Third-party models (F5-TTS Russian weights, Live2D models, voices) keep their own licenses.
+This is a **non-commercial** personal project.
+
+- Code: MIT, see [LICENSE](LICENSE). Based on [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber) by Yi-Ting Chiu and contributors.
+- Desktop client: Open-LLM-VTuber License 1.0 (Apache 2.0 with additional conditions, non-commercial use).
+- Voice: [F5-TTS](https://github.com/SWivid/F5-TTS) by Yushen Chen et al. (code MIT, pretrained weights CC BY-NC 4.0)
+  and [F5-TTS_RUSSIAN](https://huggingface.co/Misha24-10/F5-TTS_RUSSIAN) by Misha24-10 (CC BY-NC 4.0).
+  The weights are downloaded at runtime and are not redistributed here. They may not be used commercially.
+- Live2D: the bundled `mao_pro` sample belongs to Live2D Inc. and is subject to the Live2D Free Material License
+  and the Live2D Cubism Sample Data Terms of Use, which restrict erotic, violent or otherwise offensive use of sample characters.
+- Third-party Live2D models and voices are not included and keep their own licenses.
