@@ -38,6 +38,10 @@ dependencies = [
     "websocket-client>=1.8.0",
     "letta-client>=0.1.100",
     "duckduckgo-mcp-server>=0.1.1",
+    "torchaudio==2.6.0 ; sys_platform != 'darwin'",
+    "f5-tts>=1.1.22",
+    "openai-whisper>=20250625",
+    "telethon>=1.45.0",
 ]
 
 [project.optional-dependencies]
@@ -64,3 +68,17 @@ target-version = "py310"
 [tool.ruff.lint]
 # Ignore E402 (module level import not at top of file) for the run_bilibili_live.py script
 per-file-ignores = { "scripts/run_bilibili_live.py" = ["E402"] }
+
+   [tool.uv]
+   override-dependencies = [
+       "torchcodec; sys_platform == 'never'",
+   ]
+
+   [[tool.uv.index]]
+   name = "pytorch-cu124"
+   url = "https://download.pytorch.org/whl/cu124"
+   explicit = true
+
+   [tool.uv.sources]
+   torch = { index = "pytorch-cu124", marker = "sys_platform != 'darwin'" }
+   torchaudio = { index = "pytorch-cu124", marker = "sys_platform != 'darwin'" }

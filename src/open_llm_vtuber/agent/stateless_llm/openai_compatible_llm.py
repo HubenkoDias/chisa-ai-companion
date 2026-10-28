@@ -97,15 +97,24 @@ class AsyncLLM(StatelessLLMInterface):
 
             available_tools = tools if self.support_tools else NOT_GIVEN
 
+            # OpenRouter only: skip hidden reasoning and route to the fastest provider
+            extra_body = None
+            if "openrouter.ai" in str(self.client.base_url):
+                   extra_body = {
+                       "reasoning": {"enabled": False},
+                       "provider": {"sort": "latency"},
+                   }
+
             stream: AsyncStream[
-                ChatCompletionChunk
-            ] = await self.client.chat.completions.create(
-                messages=messages_with_system,
-                model=self.model,
-                stream=True,
-                temperature=self.temperature,
-                tools=available_tools,
-            )
+                   ChatCompletionChunk
+               ] = await self.client.chat.completions.create(
+                   messages=messages_with_system,
+                   model=self.model,
+                   stream=True,
+                   temperature=self.temperature,
+                   tools=available_tools,
+                   extra_body=extra_body,
+               )
             logger.debug(
                 f"Tool Support: {self.support_tools}, Available tools: {available_tools}"
             )

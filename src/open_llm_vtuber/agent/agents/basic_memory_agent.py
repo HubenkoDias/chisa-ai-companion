@@ -118,6 +118,18 @@ class BasicMemoryAgent(AgentInterface):
 
     def set_system(self, system: str):
         """Set the system prompt."""
+        # Long-term memory: append memory/memory.md (written by update_memory.py)
+        from pathlib import Path
+
+        memory_file = Path(__file__).resolve().parents[4] / "memory" / "memory.md"
+        if memory_file.exists():
+            memory = memory_file.read_text(encoding="utf-8").strip()
+            if memory:
+                system = (
+                    f"{system}\n\n## Что ты помнишь о прошлых разговорах с пользователем\n{memory}\n"
+                    "Используй воспоминания естественно и к месту, не пересказывай их все сразу."
+                )
+
         logger.debug(f"Memory Agent: Setting system prompt: '''{system}'''")
 
         if self.interrupt_method == "user":

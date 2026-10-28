@@ -1,128 +1,83 @@
 import os
+import threading
 from typing import Optional
-from TTS.api import TTS
+
+import soundfile as sf
+from cached_path import cached_path
+from f5_tts.api import F5TTS
 from loguru import logger
-import torch
+
 from .tts_interface import TTSInterface
+
+CKPT = "hf://Misha24-10/F5-TTS_RUSSIAN/F5TTS_v1_Base/model_240000_inference.safetensors"
+VOCAB = "hf://Misha24-10/F5-TTS_RUSSIAN/F5TTS_v1_Base/vocab.txt"
+
+# --- Tuning knobs ---
+NFE_STEP = 24        # quality vs speed: 16 fast, 24 balanced, 32 best
+SPEED = 0.95         # < 1.0 = slightly slower speech
+TAIL_MARGIN = 1.15   # +15% duration so word endings are not cut off
+MIN_GEN_SEC = 1.0    # minimum length for very short phrases like "Ой!"
 
 
 class TTSEngine(TTSInterface):
-    """
-    CoquiTTS engine implementation supporting both single-speaker and multi-speaker modes.
-    """
+    """F5-TTS Russian engine, plugged in under the 'coqui_tts' name."""
+
+    _lock = threading.Lock()
 
     def __init__(
         self,
         model_name: Optional[str] = None,
         speaker_wav: Optional[str] = None,
-        language: Optional[str] = "en",
+        language: Optional[str] = "ru",
         device: Optional[str] = None,
     ):
-        """
-        Initialize CoquiTTS engine.
+        self.device = device or "cuda"
+        self.ref_file = speaker_wav
 
-        Args:
-            model_name: Name of the TTS model to use. If None, will use default model.
-            speaker_wav: Path to speaker wav file for voice cloning. Only used in multi-speaker mode.
-            language: Language code for multi-lingual models. Default is "en".
-            device: Device to run model on ("cuda", "cpu", etc). If None, will auto-detect.
-        """
-        # Auto-detect device if not specified
-        if device:
-            self.device = device
-        else:
-            logger.info("coqui_tts: Using default device")
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        txt_path = os.path.splitext(speaker_wav)[0] + ".txt"
+        with open(txt_path, encoding="utf-8") as f:
+            self.ref_text = f.read().strip()
 
-        logger.info(f"coqui_tts: Using device: {device}")
+        # Reference stats used to estimate how long a new phrase should be
+        self.ref_dur = sf.info(speaker_wav).duration
+        self.ref_len = max(len(self.ref_text.encode("utf-8")), 1)
 
-        try:
-            # Initialize TTS model
-            if model_name:
-                self.tts = TTS(model_name=model_name).to(self.device)
-            else:
-                # Use default model if none specified
-                self.tts = TTS().to(self.device)
+        ckpt = str(cached_path(CKPT))
+        vocab = str(cached_path(VOCAB))
+        self.tts = F5TTS(
+            model="F5TTS_v1_Base", ckpt_file=ckpt, vocab_file=vocab, device=self.device
+        )
+        logger.info(
+            f"F5-TTS loaded on {self.device}, reference: {self.ref_file} "
+            f"({self.ref_dur:.1f}s)"
+        )
 
-            self.speaker_wav = speaker_wav
-            self.language = language
-
-            # Check if model is multi-speaker
-            self.is_multi_speaker = (
-                hasattr(self.tts, "speakers") and self.tts.speakers is not None
-            )
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize CoquiTTS model: {str(e)}")
+    def _total_duration(self, text: str) -> float:
+        """Reference + generated duration in seconds, with a safety margin."""
+        gen_len = len(text.encode("utf-8"))
+        estimated = self.ref_dur * gen_len / self.ref_len / SPEED
+        generated = max(estimated * TAIL_MARGIN, MIN_GEN_SEC)
+        return self.ref_dur + generated
 
     def generate_audio(self, text: str, file_name_no_ext: Optional[str] = None) -> str:
-        """
-        Generate speech audio file using CoquiTTS.
+        output_path = self.generate_cache_file_name(file_name_no_ext, "wav")
 
-        Args:
-            text: Text to synthesize
-            file_name_no_ext: Output filename without extension (optional)
+        clean = text.strip()
+        if clean and clean[-1] not in ".!?…,":
+            clean += "."
 
-        Returns:
-            Path to generated audio file
-        """
         try:
-            # Generate output path
-            output_path = self.generate_cache_file_name(file_name_no_ext, "wav")
-
-            # Generate speech based on speaker mode
-            if self.is_multi_speaker and self.speaker_wav:
-                # Multi-speaker mode with voice cloning
-                self.tts.tts_to_file(
-                    text=text,
-                    speaker_wav=self.speaker_wav,
-                    language=self.language,
-                    file_path=output_path,
+            with self._lock:
+                self.tts.infer(
+                    ref_file=self.ref_file,
+                    ref_text=self.ref_text,
+                    gen_text=clean,
+                    file_wave=output_path,
+                    nfe_step=NFE_STEP,
+                    fix_duration=self._total_duration(clean),
+                    show_info=lambda *a, **k: None,
                 )
-            else:
-                # Single speaker mode
-                self.tts.tts_to_file(text=text, file_path=output_path)
-
-            if not os.path.exists(output_path):
-                raise FileNotFoundError(
-                    f"Failed to generate audio file at {output_path}"
-                )
-
             return output_path
-
         except Exception as e:
+            logger.error(f"F5-TTS failed on text: {text!r}")
             raise RuntimeError(f"Failed to generate audio: {str(e)}")
-
-    @staticmethod
-    def list_available_models() -> list:
-        """
-        List all available CoquiTTS models.
-
-        Returns:
-            List of available model names
-        """
-        try:
-            return TTS().list_models()
-        except Exception as e:
-            raise RuntimeError(f"Failed to list available models: {str(e)}")
-
-    def get_speaker_info(self) -> dict:
-        """
-        Get information about available speakers for multi-speaker models.
-
-        Returns:
-            Dictionary containing speaker information
-        """
-        if not self.is_multi_speaker:
-            return {"multi_speaker": False}
-
-        try:
-            return {
-                "multi_speaker": True,
-                "speakers": self.tts.speakers,
-                "languages": self.tts.languages
-                if hasattr(self.tts, "languages")
-                else None,
-            }
-        except Exception as e:
-            raise RuntimeError(f"Failed to get speaker information: {str(e)}")

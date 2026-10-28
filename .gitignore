@@ -76,3 +76,14 @@ private/
 mcp_servers.json
 
 .vscode/
+# Chisa: never publish
+conf.yaml
+memory/
+chat_history/
+logs/
+voice/
+telegram/
+*.session
+models/
+live2d-models/*/
+!live2d-models/mao_pro/
