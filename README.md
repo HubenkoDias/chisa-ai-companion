@@ -80,7 +80,7 @@ remembers previous conversations, follows your cursor and comments on what is on
 
 ```powershell
 
-git clone -b chisa https://github.com/HubenkoDias/Open-LLM-VTuber chisa
+git clone -b chisa https://github.com/HubenkoDias/chisa-ai-companion chisa
 
 cd chisa
 
